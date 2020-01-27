@@ -1,6 +1,7 @@
 package com.tokeninc.locationtracker;
 
 import android.Manifest;
+import android.app.Application;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
@@ -22,6 +23,7 @@ import androidx.core.content.ContextCompat;
 
 import java.io.NotActiveException;
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
 
 import static com.tokeninc.locationtracker.TokenLocationTracker.MIN_METER_DISTANCE_FOR_UPDATE;
 import static com.tokeninc.locationtracker.TokenLocationTracker.MIN_MILLIS_TIME_FOR_UPDATE;
@@ -40,22 +42,20 @@ public class ForegroundLocationTracker extends Service implements LocationListen
     private final IBinder binder = new TokenLocationTrackerBinder();
     private long minMillisTimeForUpdate;
     private int minMeterDistanceForUpdate;
-    private NetworkStatus preferredLocationTracker;
+    private String preferredLocationTracker = LocationManager.NETWORK_PROVIDER;
     private LocationInformationCallback callback;
     private Location location;
-    private WeakReference<? extends AppCompatActivity> weakReference;
+    private boolean isGpsEnabled = false,isNetworkEnabled = false,isPassiveEnabled = false;
 
 
     class TokenLocationTrackerBinder extends Binder{
         ForegroundLocationTracker getInstance(
-                Bundle params,LocationInformationCallback callback,
-                WeakReference<? extends AppCompatActivity> weakReference){
+                Bundle params, LocationInformationCallback callback){
             ForegroundLocationTracker.this.params = params;
             minMillisTimeForUpdate = params.getLong(MIN_MILLIS_TIME_FOR_UPDATE,minMillisTimeForUpdate);
             minMeterDistanceForUpdate = params.getInt(MIN_METER_DISTANCE_FOR_UPDATE,minMeterDistanceForUpdate);
-            preferredLocationTracker = ((NetworkStatus) params.getSerializable(PREFERRED_LOCATION_TRACKER));
+            preferredLocationTracker = params.getString(PREFERRED_LOCATION_TRACKER,preferredLocationTracker);
             ForegroundLocationTracker.this.callback = callback;
-            ForegroundLocationTracker.this.weakReference = weakReference;
             startLocationManager();
             return ForegroundLocationTracker.this;
         }
@@ -74,6 +74,9 @@ public class ForegroundLocationTracker extends Service implements LocationListen
         if(intent.getAction() != null && intent.getAction().equals(Manifest.permission.ACCESS_FINE_LOCATION)){
             startLocationManager();
         }
+        else if(intent.getAction() != null && intent.getAction().equals(Intent.ACTION_RUN)){
+            startLocationManager();
+        }
         return START_NOT_STICKY;
     }
 
@@ -88,47 +91,60 @@ public class ForegroundLocationTracker extends Service implements LocationListen
         else{
             locationManager = (LocationManager)getApplicationContext().getSystemService(LOCATION_SERVICE);
             if(locationManager != null){
-                NetworkStatus.GPS.setStatus(locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER));
-                NetworkStatus.NETWORK.setStatus(locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER));
-                NetworkStatus.PASSIVE.setStatus(locationManager.isProviderEnabled(LocationManager.PASSIVE_PROVIDER));
+                isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+                isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+                isPassiveEnabled = locationManager.isProviderEnabled(LocationManager.PASSIVE_PROVIDER);
             }
 
-            if (!NetworkStatus.GPS.getStatus() && !NetworkStatus.NETWORK.getStatus() &&
-                    !NetworkStatus.PASSIVE.getStatus()) {
+            if (!isGpsEnabled && !isNetworkEnabled && !isPassiveEnabled) {
                 callback.onError(new IllegalStateException(
                         "There are no location service opened,either all of them disabled or not running properly"));
             }
+            else if(locationManager == null){
+                callback.onError(new IllegalStateException(
+                        "Location Manager not properly set or null"));
+            }
             else {
-                if (NetworkStatus.GPS.getStatus() && locationManager != null) {
+                if(preferredLocationTracker != null){
                     locationManager.requestLocationUpdates(
-                            LocationManager.GPS_PROVIDER,
+                            preferredLocationTracker,
                             minMillisTimeForUpdate,
                             minMeterDistanceForUpdate, this);
                     location = locationManager
+                            .getLastKnownLocation(preferredLocationTracker);
+                    showNotification();
+                }
+                else{
+                    if (isGpsEnabled) {
+                        locationManager.requestLocationUpdates(
+                                LocationManager.GPS_PROVIDER,
+                                minMillisTimeForUpdate,
+                                minMeterDistanceForUpdate, this);
+                        location = locationManager
                                 .getLastKnownLocation(LocationManager.GPS_PROVIDER);
-                    showNotification();
+                        showNotification();
 
-                }
-                if (NetworkStatus.NETWORK.getStatus() && locationManager != null) {
-                    locationManager.requestLocationUpdates(
-                            LocationManager.NETWORK_PROVIDER,
-                            minMillisTimeForUpdate,
-                            minMeterDistanceForUpdate, this);
-                    location = locationManager
+                    }
+                    if (isNetworkEnabled) {
+                        locationManager.requestLocationUpdates(
+                                LocationManager.NETWORK_PROVIDER,
+                                minMillisTimeForUpdate,
+                                minMeterDistanceForUpdate, this);
+                        location = locationManager
                                 .getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-                    showNotification();
+                        showNotification();
 
+                    }
+                    if(isPassiveEnabled){
+                        locationManager.requestLocationUpdates(
+                                LocationManager.PASSIVE_PROVIDER,
+                                minMillisTimeForUpdate,
+                                minMeterDistanceForUpdate, this);
+                        location = locationManager
+                                .getLastKnownLocation(LocationManager.PASSIVE_PROVIDER);
+                        showNotification();
+                    }
                 }
-                if(NetworkStatus.PASSIVE.getStatus() && locationManager != null){
-                    locationManager.requestLocationUpdates(
-                            LocationManager.PASSIVE_PROVIDER,
-                            minMillisTimeForUpdate,
-                            minMeterDistanceForUpdate, this);
-                    location = locationManager
-                            .getLastKnownLocation(LocationManager.PASSIVE_PROVIDER);
-                    showNotification();
-                }
-
             }
         }
     }
@@ -190,13 +206,13 @@ public class ForegroundLocationTracker extends Service implements LocationListen
     public void onProviderEnabled(String provider) {
         switch (provider){
             case "gps":
-                NetworkStatus.GPS.setStatus(true);
+                isGpsEnabled = true;
                 break;
             case "network":
-                NetworkStatus.NETWORK.setStatus(true);
+                isNetworkEnabled = true;
                 break;
             case "passive":
-                NetworkStatus.PASSIVE.setStatus(true);
+                isPassiveEnabled = true;
                 break;
         }
     }
@@ -205,19 +221,19 @@ public class ForegroundLocationTracker extends Service implements LocationListen
     public void onProviderDisabled(String provider) {
         switch (provider){
             case "gps":
-                NetworkStatus.GPS.setStatus(false);
+                isGpsEnabled = false;
                 if(callback != null){
                     callback.onError(new NotActiveException("GPS Provider Disabled"));
                 }
                 break;
             case "network":
-                NetworkStatus.NETWORK.setStatus(false);
+                isNetworkEnabled = false;
                 if(callback != null){
                     callback.onError(new NotActiveException("Network Provider Disabled"));
                 }
                 break;
             case "passive":
-                NetworkStatus.PASSIVE.setStatus(false);
+                isPassiveEnabled = false;
                 if(callback != null){
                     callback.onError(new NotActiveException("Passive Provider Disabled"));
                 }
@@ -225,22 +241,21 @@ public class ForegroundLocationTracker extends Service implements LocationListen
         }
     }
 
-
     @Override
     public void onDestroy() {
         super.onDestroy();
         hideNotification();
-        NetworkStatus.GPS.setStatus(false);
-        NetworkStatus.NETWORK.setStatus(false);
-        NetworkStatus.PASSIVE.setStatus(false);
+        isGpsEnabled = false;
+        isNetworkEnabled = false;
+        isPassiveEnabled = false;
     }
 
     @Override
     public void onTaskRemoved(Intent rootIntent) {
         super.onTaskRemoved(rootIntent);
         hideNotification();
-        NetworkStatus.GPS.setStatus(false);
-        NetworkStatus.NETWORK.setStatus(false);
-        NetworkStatus.PASSIVE.setStatus(false);
+        isGpsEnabled = false;
+        isNetworkEnabled = false;
+        isPassiveEnabled = false;
     }
 }
