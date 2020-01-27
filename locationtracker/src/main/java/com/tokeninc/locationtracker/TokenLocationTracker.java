@@ -10,9 +10,18 @@ import android.os.Bundle;
 import android.os.IBinder;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.work.Constraints;
+import androidx.work.Data;
+import androidx.work.ExistingPeriodicWorkPolicy;
+import androidx.work.NetworkType;
+import androidx.work.PeriodicWorkRequest;
+import androidx.work.WorkManager;
+import androidx.work.WorkerParameters;
 
 import java.lang.ref.WeakReference;
+import java.util.concurrent.TimeUnit;
 
 public class TokenLocationTracker {
 
@@ -153,6 +162,35 @@ public class TokenLocationTracker {
     public void startLocationTracking(final WeakReference<? extends AppCompatActivity> weakReference,
                                       final LocationInformationCallback callback){
         startLocationTrackingSystem(weakReference, callback);
+    }
+
+    public void startLocationTrackingInBackground(@NonNull Context context,
+                                                   @Nullable Data data){
+        Constraints constraints = new Constraints.Builder()
+                .setRequiresDeviceIdle(false)
+                .setRequiresCharging(false)
+                .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
+                .setRequiresBatteryNotLow(true)
+                .setRequiresStorageNotLow(true)
+                .build();
+        PeriodicWorkRequest locationTracker;
+        if(data == null){
+            locationTracker = new PeriodicWorkRequest.Builder(BackgroundLocationTracker.class,
+                            PeriodicWorkRequest.MIN_PERIODIC_INTERVAL_MILLIS, TimeUnit.MILLISECONDS)
+                            .setConstraints(constraints).build();
+        }
+        else{
+            locationTracker = new PeriodicWorkRequest.Builder(BackgroundLocationTracker.class,
+                            PeriodicWorkRequest.MIN_PERIODIC_INTERVAL_MILLIS, TimeUnit.MILLISECONDS)
+                            .setConstraints(constraints).setInputData(data).build();
+        }
+
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork("locationTracker",
+                ExistingPeriodicWorkPolicy.KEEP , locationTracker);
+    }
+
+    public void stopLocationTrackingInBackground(@NonNull Context context){
+        WorkManager.getInstance(context).cancelUniqueWork("locationTracker");
     }
 
     private void startLocationTrackingSystem(final WeakReference<? extends AppCompatActivity> weakReference,

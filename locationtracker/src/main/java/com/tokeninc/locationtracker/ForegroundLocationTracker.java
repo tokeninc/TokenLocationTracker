@@ -14,6 +14,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
@@ -60,7 +61,7 @@ public class ForegroundLocationTracker extends LifecycleService implements Locat
 
     @Nullable
     @Override
-    public IBinder onBind(Intent intent) {
+    public IBinder onBind(@NonNull Intent intent) {
         super.onBind(intent);
         params = intent.getExtras();
         return binder;
