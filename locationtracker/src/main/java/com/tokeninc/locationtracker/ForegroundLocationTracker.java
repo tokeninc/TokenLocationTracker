@@ -1,10 +1,8 @@
 package com.tokeninc.locationtracker;
 
 import android.Manifest;
-import android.app.Application;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -17,19 +15,17 @@ import android.os.Bundle;
 import android.os.IBinder;
 
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
+import androidx.lifecycle.LifecycleService;
 
 import java.io.NotActiveException;
-import java.lang.ref.WeakReference;
-import java.util.ArrayList;
 
 import static com.tokeninc.locationtracker.TokenLocationTracker.MIN_METER_DISTANCE_FOR_UPDATE;
 import static com.tokeninc.locationtracker.TokenLocationTracker.MIN_MILLIS_TIME_FOR_UPDATE;
 import static com.tokeninc.locationtracker.TokenLocationTracker.PREFERRED_LOCATION_TRACKER;
 
-public class ForegroundLocationTracker extends Service implements LocationListener {
+public class ForegroundLocationTracker extends LifecycleService implements LocationListener {
 
 
     private final String notificationChannelStringId = "token_location_tracker";
@@ -65,6 +61,7 @@ public class ForegroundLocationTracker extends Service implements LocationListen
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
+        super.onBind(intent);
         params = intent.getExtras();
         return binder;
     }
