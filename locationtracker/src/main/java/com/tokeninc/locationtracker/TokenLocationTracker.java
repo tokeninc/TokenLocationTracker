@@ -21,7 +21,7 @@ public class TokenLocationTracker {
     public static String PREFERRED_LOCATION_TRACKER = "preferred_location_tracker";
     private long minMillisTimeForUpdate = 1000L * 60; //A minute
     private int minMeterDistanceForUpdate = 50; //50 meters
-    private String preferredLocationTracker = LocationManager.GPS_PROVIDER;
+    private String preferredLocationTracker = ForegroundLocationTracker.FUSED_PROVIDER;
     private static TokenLocationTracker instance;
     private ForegroundLocationTracker tracker;
     private ServiceConnection locationConnection;

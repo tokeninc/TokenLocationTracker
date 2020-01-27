@@ -34,6 +34,7 @@ public class ForegroundLocationTracker extends Service implements LocationListen
 
     private final String notificationChannelStringId = "token_location_tracker";
     private final String notificationChannelName = "Token Location Tracker";
+    public static final String FUSED_PROVIDER = "fused";
     private final int notificationNotifyId = 1502;
     private NotificationCompat.Builder notificationBuilder;
     private NotificationManager notificationManager;
@@ -42,7 +43,7 @@ public class ForegroundLocationTracker extends Service implements LocationListen
     private final IBinder binder = new TokenLocationTrackerBinder();
     private long minMillisTimeForUpdate;
     private int minMeterDistanceForUpdate;
-    private String preferredLocationTracker = LocationManager.NETWORK_PROVIDER;
+    private String preferredLocationTracker = FUSED_PROVIDER;
     private LocationInformationCallback callback;
     private Location location;
     private boolean isGpsEnabled = false,isNetworkEnabled = false,isPassiveEnabled = false;
@@ -105,7 +106,7 @@ public class ForegroundLocationTracker extends Service implements LocationListen
                         "Location Manager not properly set or null"));
             }
             else {
-                if(preferredLocationTracker != null){
+                if(!preferredLocationTracker.equals(FUSED_PROVIDER)){
                     locationManager.requestLocationUpdates(
                             preferredLocationTracker,
                             minMillisTimeForUpdate,
