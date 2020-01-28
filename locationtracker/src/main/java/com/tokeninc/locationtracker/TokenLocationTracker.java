@@ -181,7 +181,7 @@ public class TokenLocationTracker {
         startLocationTrackingSystem(weakReference, callback);
     }
 
-    public void startLocationTrackingInBackground(@NonNull Context context,
+    public synchronized void startLocationTrackingInBackground(@NonNull Context context,
                                                    @Nullable Data data){
         Constraints constraints = new Constraints.Builder()
                 .setRequiresDeviceIdle(false)
@@ -206,11 +206,11 @@ public class TokenLocationTracker {
                 ExistingPeriodicWorkPolicy.KEEP , locationTracker);
     }
 
-    public void stopLocationTrackingInBackground(@NonNull Context context){
+    public synchronized void stopLocationTrackingInBackground(@NonNull Context context){
         WorkManager.getInstance(context).cancelUniqueWork("locationTracker");
     }
 
-    private void startLocationTrackingSystem(final WeakReference<? extends AppCompatActivity> weakReference,
+    private synchronized void startLocationTrackingSystem(final WeakReference<? extends AppCompatActivity> weakReference,
                                              final LocationInformationCallback callback){
         if(bundle == null){
             bundle = new Bundle();
@@ -256,7 +256,7 @@ public class TokenLocationTracker {
         }
     }
 
-    public void stopLocationTracking(final WeakReference<? extends AppCompatActivity> weakReference){
+    public synchronized void stopLocationTracking(final WeakReference<? extends AppCompatActivity> weakReference){
         ServiceConnection connection = locationConnection.get(weakReference.get().getClass().getName());
         if(connection != null) {
             weakReference.get().unbindService(connection);
