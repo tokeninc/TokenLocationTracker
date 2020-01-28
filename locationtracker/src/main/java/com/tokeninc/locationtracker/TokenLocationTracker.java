@@ -181,7 +181,8 @@ public class TokenLocationTracker {
         startLocationTrackingSystem(weakReference, callback);
     }
 
-    public synchronized void startLocationTrackingInBackground(@NonNull Context context,
+    private synchronized void startLocationTrackingInBackground(@NonNull Context context,
+                                                               @NonNull LocationInformationCallback callback,
                                                    @Nullable Data data){
         Constraints constraints = new Constraints.Builder()
                 .setRequiresDeviceIdle(false)
