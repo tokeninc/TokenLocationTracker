@@ -21,6 +21,7 @@ import androidx.work.WorkManager;
 import androidx.work.WorkerParameters;
 
 import java.lang.ref.WeakReference;
+import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 
 public class TokenLocationTracker {
@@ -33,9 +34,10 @@ public class TokenLocationTracker {
     private String preferredLocationTracker = ForegroundLocationTracker.FUSED_PROVIDER;
     private static TokenLocationTracker instance;
     private ForegroundLocationTracker tracker;
-    private ServiceConnection locationConnection;
+    private HashMap<String,ServiceConnection> locationConnection = new HashMap<>();
     private Intent startLocationIntent;
     private String className;
+    private Bundle bundle;
 
     public static TokenLocationTracker getInstance() {
         if(instance == null){
@@ -60,9 +62,12 @@ public class TokenLocationTracker {
                                       long minPeriodInMillis,@NonNull String preferredNetwork,
                                       int minDistance,
                                       final LocationInformationCallback callback){
-        this.minMeterDistanceForUpdate = minDistance;
-        this.minMillisTimeForUpdate = minPeriodInMillis;
-        this.preferredLocationTracker = preferredNetwork;
+        if(bundle == null){
+            this.minMeterDistanceForUpdate = minDistance;
+            this.minMillisTimeForUpdate = minPeriodInMillis;
+            this.preferredLocationTracker = preferredNetwork;
+        }
+
         startLocationTrackingSystem(weakReference, callback);
     }
 
@@ -77,8 +82,10 @@ public class TokenLocationTracker {
     public void startLocationTracking(final WeakReference<? extends AppCompatActivity> weakReference,
                                       long minPeriodInMillis,@NonNull String preferredNetwork,
                                       final LocationInformationCallback callback){
-        this.minMillisTimeForUpdate = minPeriodInMillis;
-        this.preferredLocationTracker = preferredNetwork;
+        if(bundle == null){
+            this.minMillisTimeForUpdate = minPeriodInMillis;
+            this.preferredLocationTracker = preferredNetwork;
+        }
         startLocationTrackingSystem(weakReference, callback);
     }
 
@@ -92,8 +99,10 @@ public class TokenLocationTracker {
     public void startLocationTracking(final WeakReference<? extends AppCompatActivity> weakReference,
                                       long minPeriodInMillis,int minDistance,
                                       final LocationInformationCallback callback){
-        this.minMeterDistanceForUpdate = minDistance;
-        this.minMillisTimeForUpdate = minPeriodInMillis;
+        if(bundle == null){
+            this.minMeterDistanceForUpdate = minDistance;
+            this.minMillisTimeForUpdate = minPeriodInMillis;
+        }
         startLocationTrackingSystem(weakReference, callback);
     }
 
@@ -107,8 +116,10 @@ public class TokenLocationTracker {
     public void startLocationTracking(final WeakReference<? extends AppCompatActivity> weakReference,
                                       int minDistance,@NonNull String preferredNetwork,
                                       final LocationInformationCallback callback){
-        this.minMeterDistanceForUpdate = minDistance;
-        this.preferredLocationTracker = preferredNetwork;
+        if(bundle == null){
+            this.minMeterDistanceForUpdate = minDistance;
+            this.preferredLocationTracker = preferredNetwork;
+        }
         startLocationTrackingSystem(weakReference, callback);
     }
 
@@ -121,7 +132,9 @@ public class TokenLocationTracker {
     public void startLocationTracking(final WeakReference<? extends AppCompatActivity> weakReference,
                                       long minPeriodInMillis,
                                       final LocationInformationCallback callback){
-        this.minMillisTimeForUpdate = minPeriodInMillis;
+        if(bundle == null){
+            this.minMillisTimeForUpdate = minPeriodInMillis;
+        }
         startLocationTrackingSystem(weakReference, callback);
     }
 
@@ -135,7 +148,9 @@ public class TokenLocationTracker {
     public void startLocationTracking(final WeakReference<? extends AppCompatActivity> weakReference,
                                       @NonNull String preferredNetwork,
                                       final LocationInformationCallback callback){
-        this.preferredLocationTracker = preferredNetwork;
+        if(bundle == null){
+            this.preferredLocationTracker = preferredNetwork;
+        }
         startLocationTrackingSystem(weakReference, callback);
     }
 
@@ -149,7 +164,9 @@ public class TokenLocationTracker {
     public void startLocationTracking(final WeakReference<? extends AppCompatActivity> weakReference,
                                       int minDistance,
                                       final LocationInformationCallback callback){
-        this.minMeterDistanceForUpdate = minDistance;
+        if(bundle == null){
+            this.minMeterDistanceForUpdate = minDistance;
+        }
         startLocationTrackingSystem(weakReference, callback);
     }
 
@@ -195,36 +212,44 @@ public class TokenLocationTracker {
 
     private void startLocationTrackingSystem(final WeakReference<? extends AppCompatActivity> weakReference,
                                              final LocationInformationCallback callback){
-        Bundle bundle = new Bundle();
-        if(locationConnection != null){
-            //Do not start & bind multiple times
-            return;
-        }
-        if(preferredLocationTracker != null && (preferredLocationTracker.equals(LocationManager.GPS_PROVIDER) ||
-                preferredLocationTracker.equals(LocationManager.NETWORK_PROVIDER) ||
-                preferredLocationTracker.equals(LocationManager.PASSIVE_PROVIDER))){
-            className = weakReference.get().getClass().getName();
+        if(bundle == null){
+            bundle = new Bundle();
             bundle.putInt(MIN_METER_DISTANCE_FOR_UPDATE,this.minMeterDistanceForUpdate);
             bundle.putString(PREFERRED_LOCATION_TRACKER,this.preferredLocationTracker);
             bundle.putLong(MIN_MILLIS_TIME_FOR_UPDATE,this.minMillisTimeForUpdate);
+        }
+        if(preferredLocationTracker != null && (preferredLocationTracker.equals(LocationManager.GPS_PROVIDER) ||
+                preferredLocationTracker.equals(LocationManager.NETWORK_PROVIDER) ||
+                preferredLocationTracker.equals(LocationManager.PASSIVE_PROVIDER) ||
+                preferredLocationTracker.equals(ForegroundLocationTracker.FUSED_PROVIDER))){
             startLocationIntent = new Intent(weakReference.get(),ForegroundLocationTracker.class);
             startLocationIntent.setAction(Intent.ACTION_RUN);
             startLocationIntent.putExtras(bundle);
-            weakReference.get().startService(startLocationIntent);
-            locationConnection = new ServiceConnection() {
-                @Override
-                public void onServiceConnected(ComponentName name, IBinder service) {
-                    ForegroundLocationTracker.TokenLocationTrackerBinder mLocalBinder =
-                            (ForegroundLocationTracker.TokenLocationTrackerBinder) service;
-                    tracker = mLocalBinder.getInstance(bundle,callback);
-                }
+            if(tracker != null){
+                callback.onError(new IllegalAccessException("Service already running,you cannot change parameters at first launch"));
+            }
+            else{
+                weakReference.get().startService(startLocationIntent);
+            }
+            ServiceConnection connection = locationConnection.get(weakReference.get().getClass().getName());
+            if(connection == null){
+                connection = new ServiceConnection() {
+                    @Override
+                    public void onServiceConnected(ComponentName name, IBinder service) {
+                        ForegroundLocationTracker.TokenLocationTrackerBinder mLocalBinder =
+                                (ForegroundLocationTracker.TokenLocationTrackerBinder) service;
+                        tracker = mLocalBinder.getInstance(bundle,callback);
+                    }
 
-                @Override
-                public void onServiceDisconnected(ComponentName name) {
-                    tracker = null;
-                }
-            };
-            weakReference.get().bindService(startLocationIntent, locationConnection, Context.BIND_AUTO_CREATE);
+                    @Override
+                    public void onServiceDisconnected(ComponentName name) {
+                        tracker = null;
+                    }
+                };
+                weakReference.get().bindService(startLocationIntent, connection, Context.BIND_AUTO_CREATE);
+                locationConnection.put(weakReference.get().getClass().getName(),connection);
+            }
+
         }
         else{
             throw new IllegalArgumentException("LocationTrackerParameter is wrong,use LocationManager provided trackers instead");
@@ -232,10 +257,15 @@ public class TokenLocationTracker {
     }
 
     public void stopLocationTracking(final WeakReference<? extends AppCompatActivity> weakReference){
-        if(className.equals(weakReference.get().getClass().getName())){
-            weakReference.get().unbindService(locationConnection);
-            weakReference.get().stopService(startLocationIntent);
-            instance = null;
+        ServiceConnection connection = locationConnection.get(weakReference.get().getClass().getName());
+        if(connection != null) {
+            weakReference.get().unbindService(connection);
+            locationConnection.remove(weakReference.get().getClass().getName());
+            if(locationConnection.isEmpty()){
+                weakReference.get().stopService(startLocationIntent);
+                tracker = null;
+                instance = null;
+            }
         }
         else{
             throw new IllegalStateException("Location tracker should be closed from same activity called from");

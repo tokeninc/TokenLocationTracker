@@ -19,10 +19,10 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         TokenLocationTracker.getInstance().startLocationTracking(
-                new WeakReference<AppCompatActivity>(this), new LocationInformationCallback() {
+                new WeakReference<>(MainActivity.this),1000L,100, new LocationInformationCallback() {
                     @Override
                     public void onLocationUpdate(Location location) {
-                        ((TextView) findViewById(R.id.location_test_text)).setText(location.toString());
+
                     }
 
                     @Override
