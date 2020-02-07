@@ -37,3 +37,5 @@ dependencies {
     implementation 'androidx.work:work-runtime:2.3.0'
 
 }
+
+apply from : 'publish.gradle'
