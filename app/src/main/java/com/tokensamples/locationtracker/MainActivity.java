@@ -2,16 +2,9 @@ package com.tokensamples.locationtracker;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import android.content.Intent;
 import android.os.Bundle;
-import android.os.IBinder;
-
-import com.tokeninc.foregroundImplementation.ILocationObserver;
-import com.tokeninc.foregroundImplementation.MyLocation;
-import com.tokeninc.foregroundImplementation.TokenForegroundLocationTracker;
-
-import java.lang.ref.WeakReference;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 
 public class MainActivity extends AppCompatActivity {
 
