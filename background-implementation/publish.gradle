@@ -9,7 +9,7 @@ tasks.withType(Javadoc).all {
 
 project.ext {
     mavGitUrl = 'https://github.com/tokeninc/TokenLocationTracker.git'
-    mavProjectName = 'Token HTTP Downloader'
+    mavProjectName = 'Token Location Tracker'
     mavLibraryLicenses = ["Apache-2.0":'http://www.apache.org/licenses/LICENSE-2.0.txt']
     mavLibraryDescription = "Token Location Tracker"
     mavPublishToMavenLocal = true

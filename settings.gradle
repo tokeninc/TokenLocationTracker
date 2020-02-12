@@ -1,2 +1,2 @@
-include ':app',':locationtracker'
+include ':app', ':core', ':foreground-implementation', ':background-implementation'
 rootProject.name='LocationTracker'

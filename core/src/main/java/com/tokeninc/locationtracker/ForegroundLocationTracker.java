@@ -3,68 +3,81 @@ package com.tokeninc.locationtracker;
 import android.Manifest;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
-import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.RemoteException;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
-import androidx.lifecycle.LifecycleService;
 
-import java.io.NotActiveException;
+import com.tokeninc.foregroundImplementation.IForegroundLocationObserver;
+import com.tokeninc.foregroundImplementation.ITokenForegroundLocationTracker;
+import com.tokeninc.foregroundImplementation.MyLocation;
 
-import static com.tokeninc.locationtracker.TokenLocationTracker.MIN_METER_DISTANCE_FOR_UPDATE;
-import static com.tokeninc.locationtracker.TokenLocationTracker.MIN_MILLIS_TIME_FOR_UPDATE;
-import static com.tokeninc.locationtracker.TokenLocationTracker.PREFERRED_LOCATION_TRACKER;
 
-public class ForegroundLocationTracker extends LifecycleService implements LocationListener {
+public class ForegroundLocationTracker extends Service implements LocationListener {
 
 
     private final String notificationChannelStringId = "token_location_tracker";
-    private final String notificationChannelName = "Token Location Tracker";
-    public static final String FUSED_PROVIDER = "fused";
+    private final String notificationChannelName = "Token MyLocation Tracker";
+    private static String MIN_MILLIS_TIME_FOR_UPDATE = "min_millis_time_for_update";
+    private static String MIN_METER_DISTANCE_FOR_UPDATE = "min_meter_distance_for_update";
+    private static String PREFERRED_LOCATION_TRACKER = "preferred_location_tracker";
+    private static final String FUSED_PROVIDER = "fused";
+    private long minMillisTimeForUpdate = 1000L * 60; //A minute
+    private int minMeterDistanceForUpdate = 50; //50 meters
     private final int notificationNotifyId = 1502;
-    private NotificationCompat.Builder notificationBuilder;
-    private NotificationManager notificationManager;
-    private Bundle params;
-    private LocationManager locationManager;
-    private final IBinder binder = new TokenLocationTrackerBinder();
-    private long minMillisTimeForUpdate;
-    private int minMeterDistanceForUpdate;
+    private @Nullable NotificationCompat.Builder notificationBuilder;
+    private @Nullable NotificationManager notificationManager;
+    private @Nullable Bundle params;
+    private @Nullable LocationManager locationManager;
     private String preferredLocationTracker = FUSED_PROVIDER;
-    private LocationInformationCallback callback;
+    private @Nullable IForegroundLocationObserver callback;
     private Location location;
     private boolean isGpsEnabled = false,isNetworkEnabled = false,isPassiveEnabled = false;
 
 
-    class TokenLocationTrackerBinder extends Binder{
-        ForegroundLocationTracker getInstance(
-                Bundle params, LocationInformationCallback callback){
-            ForegroundLocationTracker.this.params = params;
-            minMillisTimeForUpdate = params.getLong(MIN_MILLIS_TIME_FOR_UPDATE,minMillisTimeForUpdate);
-            minMeterDistanceForUpdate = params.getInt(MIN_METER_DISTANCE_FOR_UPDATE,minMeterDistanceForUpdate);
-            preferredLocationTracker = params.getString(PREFERRED_LOCATION_TRACKER,preferredLocationTracker);
+    private final ITokenForegroundLocationTracker.Stub tracker = new ITokenForegroundLocationTracker.Stub() {
+        @Override
+        public void registerCallback(IForegroundLocationObserver callback)  {
             ForegroundLocationTracker.this.callback = callback;
-            startLocationManager();
-            return ForegroundLocationTracker.this;
+            if(location != null){
+                try{
+                    callback.onLocationUpdate(new MyLocation(location.getLatitude(),location.getLongitude(),location.getAltitude(),
+                            location.getSpeed(),location.getBearing()));
+                }catch (RemoteException e){
+                    e.printStackTrace();
+                }
+            }
         }
-    }
+
+        @Override
+        public void unRegisterCallback(){
+            ForegroundLocationTracker.this.callback = null;
+        }
+    };
 
     @Nullable
     @Override
     public IBinder onBind(@NonNull Intent intent) {
-        super.onBind(intent);
         params = intent.getExtras();
-        return binder;
+        if(intent.getAction() != null && intent.getAction().equals(Manifest.permission.ACCESS_FINE_LOCATION)){
+            startLocationManager();
+        }
+        else if(intent.getAction() != null && intent.getAction().equals("com.tokeninc.locationtracker.REQUEST_LOCATION")){
+            startLocationManager();
+        }
+        return tracker;
     }
 
     @Override
@@ -73,7 +86,7 @@ public class ForegroundLocationTracker extends LifecycleService implements Locat
         if(intent.getAction() != null && intent.getAction().equals(Manifest.permission.ACCESS_FINE_LOCATION)){
             startLocationManager();
         }
-        else if(intent.getAction() != null && intent.getAction().equals(Intent.ACTION_RUN)){
+        else if(intent.getAction() != null && intent.getAction().equals("com.tokeninc.locationtracker.REQUEST_LOCATION")){
             startLocationManager();
         }
         return START_NOT_STICKY;
@@ -96,12 +109,22 @@ public class ForegroundLocationTracker extends LifecycleService implements Locat
             }
 
             if (!isGpsEnabled && !isNetworkEnabled && !isPassiveEnabled) {
-                callback.onError(new IllegalStateException(
-                        "There are no location service opened,either all of them disabled or not running properly"));
+                if(callback != null){
+                    try{
+                        callback.onError(1);
+                    }catch (RemoteException e){
+                        e.printStackTrace();
+                    }
+                }
             }
             else if(locationManager == null){
-                callback.onError(new IllegalStateException(
-                        "Location Manager not properly set or null"));
+                if(callback != null){
+                    try{
+                        callback.onError(2);
+                    }catch (RemoteException e){
+                        e.printStackTrace();
+                    }
+                }
             }
             else {
                 if(!preferredLocationTracker.equals(FUSED_PROVIDER)){
@@ -178,14 +201,21 @@ public class ForegroundLocationTracker extends LifecycleService implements Locat
         if(notificationManager != null){
             notificationManager.cancel(100);
         }
-        locationManager.removeUpdates(this);
+        if(locationManager != null){
+            locationManager.removeUpdates(this);
+        }
     }
 
     @Override
     public void onLocationChanged(Location location) {
         this.location = location;
         if(callback != null){
-            callback.onLocationUpdate(location);
+            try{
+                callback.onLocationUpdate(new MyLocation(location.getLatitude(),location.getLongitude(),location.getAltitude(),
+                        location.getSpeed(),location.getBearing()));
+            }catch (RemoteException e){
+                e.printStackTrace();
+            }
         }
     }
 
@@ -206,12 +236,33 @@ public class ForegroundLocationTracker extends LifecycleService implements Locat
         switch (provider){
             case "gps":
                 isGpsEnabled = true;
+                if(callback != null){
+                    try{
+                        callback.onError(6);
+                    }catch (RemoteException e){
+                        e.printStackTrace();
+                    }
+                }
                 break;
             case "network":
                 isNetworkEnabled = true;
+                if(callback != null){
+                    try{
+                        callback.onError(7);
+                    }catch (RemoteException e){
+                        e.printStackTrace();
+                    }
+                }
                 break;
             case "passive":
                 isPassiveEnabled = true;
+                if(callback != null){
+                    try{
+                        callback.onError(8);
+                    }catch (RemoteException e){
+                        e.printStackTrace();
+                    }
+                }
                 break;
         }
     }
@@ -222,19 +273,31 @@ public class ForegroundLocationTracker extends LifecycleService implements Locat
             case "gps":
                 isGpsEnabled = false;
                 if(callback != null){
-                    callback.onError(new NotActiveException("GPS Provider Disabled"));
+                    try{
+                        callback.onError(3);
+                    }catch (RemoteException e){
+                        e.printStackTrace();
+                    }
                 }
                 break;
             case "network":
                 isNetworkEnabled = false;
                 if(callback != null){
-                    callback.onError(new NotActiveException("Network Provider Disabled"));
+                    try{
+                        callback.onError(4);
+                    }catch (RemoteException e){
+                        e.printStackTrace();
+                    }
                 }
                 break;
             case "passive":
                 isPassiveEnabled = false;
                 if(callback != null){
-                    callback.onError(new NotActiveException("Passive Provider Disabled"));
+                    try{
+                        callback.onError(5);
+                    }catch (RemoteException e){
+                        e.printStackTrace();
+                    }
                 }
                 break;
         }

@@ -1,0 +1,10 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.tokeninc.backgroundImplementation" >
+    <application>
+        <receiver android:name=".TokenBackgroundLocationTracker$BackgroundLocationReceiver">
+            <intent-filter>
+                <action android:name="com.tokeninc.locationtracker.BACKGROUND_LOCATION_UPDATE"/>
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

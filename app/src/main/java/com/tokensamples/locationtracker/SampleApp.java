@@ -2,17 +2,15 @@ package com.tokensamples.locationtracker;
 
 import android.app.Application;
 
-import androidx.work.Data;
+import com.tokeninc.backgroundImplementation.TokenBackgroundLocationTracker;
 
-import com.tokeninc.locationtracker.TokenLocationTracker;
-
+import java.lang.ref.WeakReference;
 
 public class SampleApp extends Application {
 
     @Override
     public void onCreate() {
         super.onCreate();
-        Data.Builder builder = new Data.Builder();
-        TokenLocationTracker.getInstance().startLocationTrackingInBackground(this,builder.build());
+        new TokenBackgroundLocationTracker(new WeakReference<>(this));
     }
 }
