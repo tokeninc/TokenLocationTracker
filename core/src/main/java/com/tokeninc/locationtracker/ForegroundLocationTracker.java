@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -13,16 +14,11 @@ import android.location.LocationManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.os.RemoteException;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
-
-import com.tokeninc.foregroundImplementation.IForegroundLocationObserver;
-import com.tokeninc.foregroundImplementation.ITokenForegroundLocationTracker;
-import com.tokeninc.foregroundImplementation.MyLocation;
 
 
 public class ForegroundLocationTracker extends Service implements LocationListener {
@@ -42,30 +38,9 @@ public class ForegroundLocationTracker extends Service implements LocationListen
     private @Nullable Bundle params;
     private @Nullable LocationManager locationManager;
     private String preferredLocationTracker = FUSED_PROVIDER;
-    private @Nullable IForegroundLocationObserver callback;
     private Location location;
     private boolean isGpsEnabled = false,isNetworkEnabled = false,isPassiveEnabled = false;
 
-
-    private final ITokenForegroundLocationTracker.Stub tracker = new ITokenForegroundLocationTracker.Stub() {
-        @Override
-        public void registerCallback(IForegroundLocationObserver callback)  {
-            ForegroundLocationTracker.this.callback = callback;
-            if(location != null){
-                try{
-                    callback.onLocationUpdate(new MyLocation(location.getLatitude(),location.getLongitude(),location.getAltitude(),
-                            location.getSpeed(),location.getBearing()));
-                }catch (RemoteException e){
-                    e.printStackTrace();
-                }
-            }
-        }
-
-        @Override
-        public void unRegisterCallback(){
-            ForegroundLocationTracker.this.callback = null;
-        }
-    };
 
     @Nullable
     @Override
@@ -77,7 +52,7 @@ public class ForegroundLocationTracker extends Service implements LocationListen
         else if(intent.getAction() != null && intent.getAction().equals("com.tokeninc.locationtracker.REQUEST_LOCATION")){
             startLocationManager();
         }
-        return tracker;
+        return null;
     }
 
     @Override
@@ -109,22 +84,10 @@ public class ForegroundLocationTracker extends Service implements LocationListen
             }
 
             if (!isGpsEnabled && !isNetworkEnabled && !isPassiveEnabled) {
-                if(callback != null){
-                    try{
-                        callback.onError(1);
-                    }catch (RemoteException e){
-                        e.printStackTrace();
-                    }
-                }
+                sendBroadcast(1);
             }
             else if(locationManager == null){
-                if(callback != null){
-                    try{
-                        callback.onError(2);
-                    }catch (RemoteException e){
-                        e.printStackTrace();
-                    }
-                }
+                sendBroadcast(2);
             }
             else {
                 if(!preferredLocationTracker.equals(FUSED_PROVIDER)){
@@ -171,6 +134,24 @@ public class ForegroundLocationTracker extends Service implements LocationListen
         }
     }
 
+    private void sendBroadcast(Location location){
+        Intent intent = new Intent();
+        Bundle bundle = new Bundle();
+        bundle.putParcelable("location",location);
+        intent.putExtras(bundle);
+        intent.setAction("com.tokeninc.locationtracker.FOREGROUND_LOCATION_UPDATE");
+        getApplicationContext().sendBroadcast(intent);
+    }
+
+    private void sendBroadcast(int code){
+        Intent intent = new Intent();
+        Bundle bundle = new Bundle();
+        bundle.putInt("error",code);
+        intent.putExtras(bundle);
+        intent.setAction("com.tokeninc.locationtracker.FOREGROUND_LOCATION_INFO");
+        getApplicationContext().sendBroadcast(intent);
+    }
+
     void showNotification(){
         if(notificationManager == null){
             notificationManager = (NotificationManager)getApplicationContext().getSystemService(Context.NOTIFICATION_SERVICE);
@@ -209,14 +190,7 @@ public class ForegroundLocationTracker extends Service implements LocationListen
     @Override
     public void onLocationChanged(Location location) {
         this.location = location;
-        if(callback != null){
-            try{
-                callback.onLocationUpdate(new MyLocation(location.getLatitude(),location.getLongitude(),location.getAltitude(),
-                        location.getSpeed(),location.getBearing()));
-            }catch (RemoteException e){
-                e.printStackTrace();
-            }
-        }
+        sendBroadcast(location);
     }
 
     @Override
@@ -236,33 +210,15 @@ public class ForegroundLocationTracker extends Service implements LocationListen
         switch (provider){
             case "gps":
                 isGpsEnabled = true;
-                if(callback != null){
-                    try{
-                        callback.onError(6);
-                    }catch (RemoteException e){
-                        e.printStackTrace();
-                    }
-                }
+                sendBroadcast(6);
                 break;
             case "network":
                 isNetworkEnabled = true;
-                if(callback != null){
-                    try{
-                        callback.onError(7);
-                    }catch (RemoteException e){
-                        e.printStackTrace();
-                    }
-                }
+                sendBroadcast(7);
                 break;
             case "passive":
                 isPassiveEnabled = true;
-                if(callback != null){
-                    try{
-                        callback.onError(8);
-                    }catch (RemoteException e){
-                        e.printStackTrace();
-                    }
-                }
+                sendBroadcast(8);
                 break;
         }
     }
@@ -272,33 +228,15 @@ public class ForegroundLocationTracker extends Service implements LocationListen
         switch (provider){
             case "gps":
                 isGpsEnabled = false;
-                if(callback != null){
-                    try{
-                        callback.onError(3);
-                    }catch (RemoteException e){
-                        e.printStackTrace();
-                    }
-                }
+                sendBroadcast(3);
                 break;
             case "network":
                 isNetworkEnabled = false;
-                if(callback != null){
-                    try{
-                        callback.onError(4);
-                    }catch (RemoteException e){
-                        e.printStackTrace();
-                    }
-                }
+                sendBroadcast(4);
                 break;
             case "passive":
                 isPassiveEnabled = false;
-                if(callback != null){
-                    try{
-                        callback.onError(5);
-                    }catch (RemoteException e){
-                        e.printStackTrace();
-                    }
-                }
+                sendBroadcast(5);
                 break;
         }
     }

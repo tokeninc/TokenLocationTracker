@@ -1,20 +1,24 @@
 package com.tokeninc.foregroundImplementation;
 
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.ServiceConnection;
+import android.content.IntentFilter;
+import android.location.Location;
 import android.location.LocationManager;
 import android.os.Bundle;
-import android.os.IBinder;
-import android.os.RemoteException;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.lifecycle.Lifecycle;
+import androidx.lifecycle.LifecycleObserver;
+import androidx.lifecycle.OnLifecycleEvent;
 
 import java.lang.ref.WeakReference;
 
-public class TokenForegroundLocationTracker {
+public class TokenForegroundLocationTracker implements LifecycleObserver {
 
     private Bundle bundle;
     private long minMillisTimeForUpdate = 1000L * 60; //A minute
@@ -24,9 +28,8 @@ public class TokenForegroundLocationTracker {
     private static String MIN_METER_DISTANCE_FOR_UPDATE = "min_meter_distance_for_update";
     private static String PREFERRED_LOCATION_TRACKER = "preferred_location_tracker";
     private static final String FUSED_PROVIDER = "fused";
-    private ITokenForegroundLocationTracker locationTracker;
+    private ForegroundLocationObserver locationTracker;
     private WeakReference<? extends AppCompatActivity> weakReference;
-    private ServiceConnection connection;
     private Intent startLocationIntent;
 
     /**
@@ -40,7 +43,7 @@ public class TokenForegroundLocationTracker {
     public TokenForegroundLocationTracker(final WeakReference<? extends AppCompatActivity> weakReference,
                                           long minPeriodInMillis, @NonNull String preferredNetwork,
                                           int minDistance,
-                                          final IForegroundLocationObserver callback){
+                                          final ForegroundLocationObserver callback){
         if(bundle == null){
             this.minMeterDistanceForUpdate = minDistance;
             this.minMillisTimeForUpdate = minPeriodInMillis;
@@ -59,7 +62,7 @@ public class TokenForegroundLocationTracker {
 
     public TokenForegroundLocationTracker(final WeakReference<? extends AppCompatActivity> weakReference,
                                           long minPeriodInMillis, @NonNull String preferredNetwork,
-                                          final IForegroundLocationObserver callback){
+                                          final ForegroundLocationObserver callback){
         if(bundle == null){
             this.minMillisTimeForUpdate = minPeriodInMillis;
             this.preferredLocationTracker = preferredNetwork;
@@ -76,7 +79,7 @@ public class TokenForegroundLocationTracker {
      */
     public TokenForegroundLocationTracker(final WeakReference<? extends AppCompatActivity> weakReference,
                                           long minPeriodInMillis, int minDistance,
-                                          final IForegroundLocationObserver callback){
+                                          final ForegroundLocationObserver callback){
         if(bundle == null){
             this.minMeterDistanceForUpdate = minDistance;
             this.minMillisTimeForUpdate = minPeriodInMillis;
@@ -93,7 +96,7 @@ public class TokenForegroundLocationTracker {
      */
     public TokenForegroundLocationTracker(final WeakReference<? extends AppCompatActivity> weakReference,
                                           int minDistance, @NonNull String preferredNetwork,
-                                          final IForegroundLocationObserver callback){
+                                          final ForegroundLocationObserver callback){
         if(bundle == null){
             this.minMeterDistanceForUpdate = minDistance;
             this.preferredLocationTracker = preferredNetwork;
@@ -109,7 +112,7 @@ public class TokenForegroundLocationTracker {
      */
     public TokenForegroundLocationTracker(final WeakReference<? extends AppCompatActivity> weakReference,
                                           long minPeriodInMillis,
-                                          final IForegroundLocationObserver callback){
+                                          final ForegroundLocationObserver callback){
         if(bundle == null){
             this.minMillisTimeForUpdate = minPeriodInMillis;
         }
@@ -125,7 +128,7 @@ public class TokenForegroundLocationTracker {
 
     public TokenForegroundLocationTracker(final WeakReference<? extends AppCompatActivity> weakReference,
                                           @NonNull String preferredNetwork,
-                                          final IForegroundLocationObserver callback){
+                                          final ForegroundLocationObserver callback){
         if(bundle == null){
             this.preferredLocationTracker = preferredNetwork;
         }
@@ -141,7 +144,7 @@ public class TokenForegroundLocationTracker {
 
     public TokenForegroundLocationTracker(final WeakReference<? extends AppCompatActivity> weakReference,
                                           int minDistance,
-                                          final IForegroundLocationObserver callback){
+                                          final ForegroundLocationObserver callback){
         if(bundle == null){
             this.minMeterDistanceForUpdate = minDistance;
         }
@@ -155,14 +158,15 @@ public class TokenForegroundLocationTracker {
      */
 
     public TokenForegroundLocationTracker(final WeakReference<? extends AppCompatActivity> weakReference,
-                                          final IForegroundLocationObserver callback){
+                                          final ForegroundLocationObserver callback){
         startLocationTrackingSystem(weakReference, callback);
     }
 
     private void startLocationTrackingSystem(final WeakReference<? extends AppCompatActivity> weakReference,
-                                             final IForegroundLocationObserver callback){
+                                             final ForegroundLocationObserver callback){
         this.weakReference = weakReference;
-        //this.weakReference.get().getLifecycle().addObserver(this);
+        this.locationTracker = callback;
+        this.weakReference.get().getLifecycle().addObserver(this);
         if(bundle == null){
             bundle = new Bundle();
             bundle.putInt(MIN_METER_DISTANCE_FOR_UPDATE,this.minMeterDistanceForUpdate);
@@ -179,33 +183,47 @@ public class TokenForegroundLocationTracker {
                     "com.tokeninc.locationtracker.ForegroundLocationTracker"));
             startLocationIntent.setAction(action);
             startLocationIntent.putExtras(bundle);
-            connection = new ServiceConnection() {
-                @Override
-                public void onServiceConnected(ComponentName name, IBinder service) {
-                    locationTracker = ITokenForegroundLocationTracker.Stub.asInterface(service);
-                    try{
-                        locationTracker.registerCallback(callback);
-                    }catch (RemoteException e){
-                        e.printStackTrace();
-                    }
-                }
-
-                @Override
-                public void onServiceDisconnected(ComponentName name) {
-                    if(locationTracker != null){
-                        try{
-                            locationTracker.unRegisterCallback();
-                        }catch (RemoteException e){
-                            e.printStackTrace();
-                        }
-                    }
-
-                }
-            };
-            weakReference.get().bindService(startLocationIntent, connection, Context.BIND_AUTO_CREATE);
+            weakReference.get().getApplicationContext().registerReceiver(foregroundBroadcastReceiver,
+                    new IntentFilter("com.tokeninc.locationtracker.FOREGROUND_LOCATION_UPDATE"));
+            weakReference.get().getApplicationContext().registerReceiver(foregroundBroadcastReceiver,
+                    new IntentFilter("com.tokeninc.locationtracker.FOREGROUND_LOCATION_INFO"));
+            weakReference.get().startService(startLocationIntent);
+            //weakReference.get().bindService(startLocationIntent, connection, Context.BIND_AUTO_CREATE);
         }
         else{
             throw new IllegalArgumentException("LocationTrackerParameter is wrong,use LocationManager provided trackers instead");
+        }
+    }
+
+    private BroadcastReceiver foregroundBroadcastReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if(intent.getAction() != null){
+                if(intent.getAction().equals("com.tokeninc.locationtracker.FOREGROUND_LOCATION_UPDATE") &&
+                        intent.hasExtra("location")){
+                    if(locationTracker != null){
+                        locationTracker.onLocationUpdate(((Location) intent.getParcelableExtra("location")));
+                    }
+                }
+                else if(intent.getAction().equals("com.tokeninc.locationtracker.FOREGROUND_LOCATION_INFO") &&
+                        intent.hasExtra("error")){
+                    if(locationTracker != null){
+                        int val = intent.getIntExtra("error",Integer.MIN_VALUE);
+                        if(val != Integer.MIN_VALUE){
+                            locationTracker.onError(val);
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+    public void stopService(){
+        try{
+            weakReference.get().stopService(startLocationIntent);
+        }catch (Exception e){
+            Log.getStackTraceString(e);
         }
     }
 }

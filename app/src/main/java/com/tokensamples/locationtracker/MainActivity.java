@@ -2,35 +2,31 @@ package com.tokensamples.locationtracker;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.location.Location;
 import android.os.Bundle;
-import java.util.concurrent.atomic.AtomicBoolean;
+
+import com.tokeninc.foregroundImplementation.ForegroundLocationObserver;
+import com.tokeninc.foregroundImplementation.TokenForegroundLocationTracker;
+
+import java.lang.ref.WeakReference;
 
 
 public class MainActivity extends AppCompatActivity {
-
-    AtomicBoolean doOnce = new AtomicBoolean(false);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        /*new TokenForegroundLocationTracker(new WeakReference<>(MainActivity.this), new ILocationObserver() {
+        new TokenForegroundLocationTracker(new WeakReference<>(MainActivity.this), new ForegroundLocationObserver() {
             @Override
-            public void onLocationUpdate(MyLocation location){
-                if(!doOnce.getAndSet(true)){
-                    startActivity(new Intent(MainActivity.this,Main2Activity.class));
-                }
-            }
-
-            @Override
-            public void onError(int errorCode){
+            public void onLocationUpdate(Location location) {
 
             }
 
             @Override
-            public IBinder asBinder() {
-                return null;
+            public void onError(int errorCode) {
+
             }
-        });*/
+        });
     }
 }
